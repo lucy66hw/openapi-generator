@@ -41,6 +41,7 @@ import java.io.File;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.regex.Pattern;
+import java.util.Locale;
 
 import static org.openapitools.codegen.utils.StringUtils.*;
 
@@ -154,7 +155,8 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         typeMapping.put("file", "string");
         typeMapping.put("binary", "string");
         typeMapping.put("ByteArray", "bytes");
-        typeMapping.put("object", "TODO_OBJECT_MAPPING");
+        typeMapping.put("map<string, object>", "bytes");
+        typeMapping.put("object", "bytes");
 
         importMapping.clear();
 
@@ -231,8 +233,9 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
             for (Map<String, Object> value : enumVars) {
                 String name = (String) value.get("name");
-                value.put("name", prefix + "_" + name);
-                value.put("value", "\"" + prefix + "_" + name + "\"");
+                String sanitizePrefix = toConstantName(prefix);
+                value.put("name", sanitizePrefix + "_" + name);
+                value.put("value", "\"" + sanitizePrefix + "_" + name + "\"");
             }
         }
 
@@ -255,7 +258,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                 List<Map<String, Object>> enumVars = (List<Map<String, Object>>) allowableValues.get("enumVars");
 
                 HashMap<String, Object> unknown = new HashMap<String, Object>();
-                unknown.put("name", "UNKNOWN");
+                unknown.put("name", "INVALID");
                 unknown.put("isString", "false");
                 unknown.put("value", "\"UNKNOWN\"");
 
@@ -339,6 +342,10 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                         LOGGER.error("Exception when assigning a index to a protobuf field", e);
                         var.vendorExtensions.putIfAbsent("x-protobuf-index", "Generated field number is in reserved range (19000, 19999)");
                     }
+                }
+
+                if (!var.baseName.equals(var.name)) {
+                    var.vendorExtensions.put("x-protobuf-json-name", var.baseName);
                 }
             }
         }
@@ -496,8 +503,9 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
     @Override
     public String toVarName(final String name) {
-        return name;
+        return removeLeadingUnderScore(name);
     }
+
 
     @Override
     public String toModelName(String name) {
@@ -647,5 +655,21 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
     @Override
     public GeneratorLanguage generatorLanguage() {
         return GeneratorLanguage.PROTOBUF;
+    }
+
+    public String toConstantName(String input) {
+        String sanitizedInput = input.replace("_", " ");
+
+        sanitizedInput = sanitizedInput.replaceAll("(?<!^)([A-Z])", " $1");
+
+        String constantName = sanitizedInput.trim().replaceAll("\\s+", "_").toUpperCase(Locale.ROOT);
+        return constantName;
+    }
+
+    public String removeLeadingUnderScore (String name) {
+        if (name.startsWith("_")) {
+            name = name.substring(1);
+        }
+        return name;
     }
 }

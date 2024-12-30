@@ -1,0 +1,32 @@
+openapi: 3.1.0
+info:
+  title: Title
+  description: Title
+  version: 1.0.0
+servers:
+  - url: 'https'
+paths: {}
+components:
+  schemas:
+    CompletionSuggestOption:
+      properties:
+        _id:
+          type: string
+        _score:
+          format: float
+          type: number
+        _source:
+          type: object
+        collate_match:
+          type: boolean
+        fields:
+          additionalProperties:
+            type: object
+          type: object
+        zero_terms_query:
+          $ref: '#/components/schemas/CombinedFieldsZeroTerms'
+    CombinedFieldsZeroTerms:
+      enum:
+        - all
+        - none
+      type: string
