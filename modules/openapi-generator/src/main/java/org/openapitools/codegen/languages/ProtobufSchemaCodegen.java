@@ -302,52 +302,98 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                 }
             }
 
-            int index = 1;
-            for (CodegenProperty var : cm.vars) {
-                // add x-protobuf-type: repeated if it's an array
-                if (Boolean.TRUE.equals(var.isArray)) {
-                    var.vendorExtensions.put("x-protobuf-type", "repeated");
-                } else if (Boolean.TRUE.equals(var.isNullable && var.isPrimitiveType)) {
-                    var.vendorExtensions.put("x-protobuf-type", "optional");
-                }
-
-                // add x-protobuf-data-type
-                // ref: https://developers.google.com/protocol-buffers/docs/proto3
-                if (!var.vendorExtensions.containsKey("x-protobuf-data-type")) {
-                    if (var.isArray) {
-                        var.vendorExtensions.put("x-protobuf-data-type", var.items.dataType);
+            if (cm.getComposedSchemas() != null && cm.getComposedSchemas().getOneOf() != null
+                    && !cm.getComposedSchemas().getOneOf().isEmpty()){
+                List<Map<String, Object>> oneofFields = new ArrayList<>();
+                List<Map<String, Object>> additionalMessages = new ArrayList<>();
+                int oneofIndex = 1;
+                List<CodegenProperty> oneOfs = cm.getComposedSchemas().getOneOf();
+                for (CodegenProperty oneOf : oneOfs) {
+                    Map<String, Object> oneofField = new HashMap<>();
+                    String type = "";
+                    if (oneOf.isArray || oneOf.isMap) {
+                        if (oneOf.getTitle() != null) {
+                            type = camelize(oneOf.getTitle());
+                        } else {
+                            String outer = camelize(oneOf.baseType);
+                            String inner = camelize(oneOf.items.dataType);
+                            type = camelize(inner+outer);
+                        }
+                        Map<String, Object> additionalMessage = new HashMap<>();
+                        additionalMessage.put("type", type);
+                        if (oneOf.isArray) {
+                            additionalMessage.put("array_type", "repeated");
+                            additionalMessage.put("original_type", oneOf.items.dataType);
+                            additionalMessage.put("original_name", underscore(type));
+                        }else{
+                            additionalMessage.put("original_type", oneOf.dataType);
+                            additionalMessage.put("original_name", underscore(type));
+                        }
+                        additionalMessages.add(additionalMessage);
                     } else {
-                        var.vendorExtensions.put("x-protobuf-data-type", var.dataType);
+                        type = oneOf.dataType;
                     }
+                    oneofField.put("type", type);
+                    oneofField.put("name", underscore(type));
+                    oneofField.put("index", oneofIndex++);
+                    oneofFields.add(oneofField);
                 }
-
-                if (var.isEnum) {
-                    addUnknownToAllowableValues(var.allowableValues);
-                    addEnumValuesPrefix(var.allowableValues, var.getEnumName());
-
-                    if (var.allowableValues.containsKey("enumVars")) {
-                        List<Map<String, Object>> enumVars = (List<Map<String, Object>>) var.allowableValues.get("enumVars");
-                        addEnumIndexes(enumVars);
+                String oneOfGroupName = underscore(cm.name);
+                cm.vendorExtensions.put("x-protobuf-oneof-name", oneOfGroupName);
+                cm.vendorExtensions.put("x-protobuf-oneof-fields", oneofFields);
+                if (!additionalMessages.isEmpty()) {
+                    cm.vendorExtensions.put("x-protobuf-additional-messages", additionalMessages);
+                }
+                cm.vars.clear();
+            } else {
+                int index = 1;
+                for (CodegenProperty var : cm.vars) {
+                    // add x-protobuf-type: repeated if it's an array
+                    if (Boolean.TRUE.equals(var.isArray)) {
+                        var.vendorExtensions.put("x-protobuf-type", "repeated");
+                    } else if (Boolean.TRUE.equals(var.isNullable && var.isPrimitiveType)) {
+                        var.vendorExtensions.put("x-protobuf-type", "optional");
                     }
-                }
 
-                // Add x-protobuf-index, unless already specified
-                if (this.numberedFieldNumberList) {
-                    var.vendorExtensions.putIfAbsent("x-protobuf-index", index);
-                    index++;
-                } else {
-                    try {
-                        var.vendorExtensions.putIfAbsent("x-protobuf-index", generateFieldNumberFromString(var.getName()));
-                    } catch (ProtoBufIndexComputationException e) {
-                        LOGGER.error("Exception when assigning a index to a protobuf field", e);
-                        var.vendorExtensions.putIfAbsent("x-protobuf-index", "Generated field number is in reserved range (19000, 19999)");
+                    // add x-protobuf-data-type
+                    // ref: https://developers.google.com/protocol-buffers/docs/proto3
+                    if (!var.vendorExtensions.containsKey("x-protobuf-data-type")) {
+                        if (var.isArray) {
+                            var.vendorExtensions.put("x-protobuf-data-type", var.items.dataType);
+                        } else {
+                            var.vendorExtensions.put("x-protobuf-data-type", var.dataType);
+                        }
                     }
-                }
 
-                if (!var.baseName.equals(var.name)) {
-                    var.vendorExtensions.put("x-protobuf-json-name", var.baseName);
+                    if (var.isEnum) {
+                        addUnknownToAllowableValues(var.allowableValues);
+                        addEnumValuesPrefix(var.allowableValues, var.getEnumName());
+
+                        if (var.allowableValues.containsKey("enumVars")) {
+                            List<Map<String, Object>> enumVars = (List<Map<String, Object>>) var.allowableValues.get("enumVars");
+                            addEnumIndexes(enumVars);
+                        }
+                    }
+
+                    // Add x-protobuf-index, unless already specified
+                    if (this.numberedFieldNumberList) {
+                        var.vendorExtensions.putIfAbsent("x-protobuf-index", index);
+                        index++;
+                    } else {
+                        try {
+                            var.vendorExtensions.putIfAbsent("x-protobuf-index", generateFieldNumberFromString(var.getName()));
+                        } catch (ProtoBufIndexComputationException e) {
+                            LOGGER.error("Exception when assigning a index to a protobuf field", e);
+                            var.vendorExtensions.putIfAbsent("x-protobuf-index", "Generated field number is in reserved range (19000, 19999)");
+                        }
+                    }
+
+                    if (!var.baseName.equals(var.name)) {
+                        var.vendorExtensions.put("x-protobuf-json-name", var.baseName);
+                    }
                 }
             }
+
         }
         return objs;
     }
