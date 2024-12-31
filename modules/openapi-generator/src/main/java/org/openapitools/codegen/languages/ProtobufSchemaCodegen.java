@@ -552,6 +552,15 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         return removeLeadingUnderScore(name);
     }
 
+    @Override
+    public String toParamName(String name) {
+        // obtain the name from parameterNameMapping directly if provided
+        if (parameterNameMapping.containsKey(name)) {
+            return parameterNameMapping.get(name);
+        }
+
+        return toVarName(name);
+    }
 
     @Override
     public String toModelName(String name) {
@@ -626,7 +635,9 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                         p.vendorExtensions.put("x-protobuf-data-type", p.dataType);
                     }
                 }
-
+                if (!p.baseName.equals(p.paramName)) {
+                    p.vendorExtensions.put("x-protobuf-json-name", p.baseName);
+                }
                 p.vendorExtensions.putIfAbsent("x-protobuf-index", index);
                 index++;
             }
