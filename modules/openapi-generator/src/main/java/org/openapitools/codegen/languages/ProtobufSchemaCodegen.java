@@ -41,6 +41,7 @@ import java.io.File;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.regex.Pattern;
+import com.google.common.base.CaseFormat;
 
 import static org.openapitools.codegen.utils.StringUtils.*;
 
@@ -65,6 +66,11 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
     @Override
     public CodegenType getTag() {
         return CodegenType.SCHEMA;
+    }
+
+    @Override
+    public String toEnumName(CodegenProperty property) {
+        return StringUtils.capitalize(property.name);
     }
 
     @Override
@@ -228,7 +234,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
     public void addEnumValuesPrefix(Map<String, Object> allowableValues, String prefix) {
         if (allowableValues.containsKey("enumVars")) {
             List<Map<String, Object>> enumVars = (List<Map<String, Object>>) allowableValues.get("enumVars");
-
+            prefix = CaseFormat.LOWER_CAMEL.to(CaseFormat.UPPER_UNDERSCORE, prefix);
             for (Map<String, Object> value : enumVars) {
                 String name = (String) value.get("name");
                 value.put("name", prefix + "_" + name);
