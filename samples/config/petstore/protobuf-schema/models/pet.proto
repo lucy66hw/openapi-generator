@@ -23,7 +23,7 @@ message Pet {
 
   string name = 3373707;
 
-  repeated string photoUrls = 311086539;
+  repeated string photo_urls = 507546927;
 
   repeated Tag tags = 3552281;
 

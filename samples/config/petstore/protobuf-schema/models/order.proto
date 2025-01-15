@@ -17,11 +17,11 @@ message Order {
 
   int64 id = 3355;
 
-  int64 petId = 106557082;
+  int64 pet_id = 454805446;
 
   int32 quantity = 211262327;
 
-  string shipDate = 517554166;
+  string ship_date = 86954963;
 
   // Order Status
   enum Status {
