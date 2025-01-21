@@ -13,7 +13,8 @@ import public "{{{modelPackage}}}/{{{import}}}.proto";
 {{#model}}
 {{#isEnum}}{{>enum}}{{/isEnum}}{{^isEnum}}message {{classname}} {
 
-{{#vendorExtensions.is_oneOf_model}}
+{{#oneOf}}
+{{#-first}}
     oneof {{classVarName}} {
         {{#vars}}
         {{#description}}
@@ -23,9 +24,10 @@ import public "{{{modelPackage}}}/{{{import}}}.proto";
 
         {{/vars}}
     }
-{{/vendorExtensions.is_oneOf_model}}
+{{/-first}}
+{{/oneOf}}
 
-{{^vendorExtensions.is_oneOf_model}}
+{{^oneOf}}
   {{#vars}}
   {{#description}}
   // {{{.}}}
@@ -46,7 +48,7 @@ import public "{{{modelPackage}}}/{{{import}}}.proto";
   {{/isEnum}}
 
   {{/vars}}
-{{/vendorExtensions.is_oneOf_model}}
+{{/oneOf}}
 }
 {{/isEnum}}
 {{/model}}

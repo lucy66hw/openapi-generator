@@ -297,11 +297,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         }
     }
 
-    public void processOneOfSchemas(CodegenModel cm) {
-        List<CodegenProperty> composedSchemasProperty = cm.getComposedSchemas().getOneOf();
-        if(!cm.oneOf.isEmpty()){
-            cm.vendorExtensions.put("is_oneOf_model", true);
-        }
+    public List<CodegenProperty> processSchemaVars(List<CodegenProperty> composedSchemasProperty, boolean isOneOf) {
         for(CodegenProperty cd: composedSchemasProperty) {
             if (cd.getTitle() != null) {
                 cd.name = cd.getTitle();
@@ -309,14 +305,14 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                 cd.name = getNameFromDataType(cd);
             }
         }
-        cm.vars = composedSchemasProperty;
+        return composedSchemasProperty;
     }
 
     public String getNameFromDataType(CodegenProperty property) {
         if (Boolean.TRUE.equals(property.getIsArray())){
-            return property.mostInnerItems.dataType + "_array";
+            return underscore(property.mostInnerItems.dataType + "_array");
         } else if (Boolean.TRUE.equals(property.getIsMap())) {
-            return property.mostInnerItems.dataType + "_map";
+            return underscore(property.mostInnerItems.dataType + "_map");
         } else {
             return underscore(property.dataType);
         }
@@ -341,7 +337,9 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
             }
 
             if(cm.oneOf != null && !cm.oneOf.isEmpty()){
-                processOneOfSchemas(cm);
+                cm.vars = processSchemaVars(cm.getComposedSchemas().getOneOf(), true);
+            } else if (cm.anyOf != null && !cm.anyOf.isEmpty()) {
+                cm.vars = processSchemaVars(cm.getComposedSchemas().getAnyOf(), false);
             }
             int index = 1;
             for (CodegenProperty var : cm.vars) {

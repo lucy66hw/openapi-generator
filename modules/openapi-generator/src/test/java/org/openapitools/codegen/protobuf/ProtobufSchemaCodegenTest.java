@@ -101,7 +101,31 @@ public class ProtobufSchemaCodegenTest {
         TestUtils.ensureContainsFile(files, output, "models/fruit.proto");
         Path path = Paths.get(output + "/models/fruit.proto");
 
-        assertFileEquals(path, Paths.get("src/test/resources/3_0/protobuf-schema/fruit.Proto"));
+        assertFileEquals(path, Paths.get("src/test/resources/3_0/protobuf-schema/fruitOneOf.proto"));
+
+        output.deleteOnExit();
+    }
+
+    @Test
+    public void testCodeGenWithPrimitiveAnyOf() throws IOException {
+        // set line break to \n across all platforms
+        System.setProperty("line.separator", "\n");
+
+        File output = Files.createTempDirectory("test").toFile();
+
+        final CodegenConfigurator configurator = new CodegenConfigurator()
+                .setGeneratorName("protobuf-schema")
+                .setInputSpec("src/test/resources/3_0/anyOf.yaml")
+                .setOutputDir(output.getAbsolutePath().replace("\\", "/"));
+
+        final ClientOptInput clientOptInput = configurator.toClientOptInput();
+        DefaultGenerator generator = new DefaultGenerator();
+        List<File> files = generator.opts(clientOptInput).generate();
+
+        TestUtils.ensureContainsFile(files, output, "models/fruit.proto");
+        Path path = Paths.get(output + "/models/fruit.proto");
+
+        assertFileEquals(path, Paths.get("src/test/resources/3_0/protobuf-schema/fruitAnyOf.proto"));
 
         output.deleteOnExit();
     }
