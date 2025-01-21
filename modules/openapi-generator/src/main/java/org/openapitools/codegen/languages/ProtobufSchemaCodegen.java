@@ -297,6 +297,32 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         }
     }
 
+    public void processOneOfSchemas(CodegenModel cm) {
+        List<CodegenProperty> composedSchemasProperty = cm.getComposedSchemas().getOneOf();
+        if(!cm.oneOf.isEmpty()){
+            cm.vendorExtensions.put("is_oneOf_model", true);
+        }
+        for(CodegenProperty cd: composedSchemasProperty) {
+            if (cd.getTitle() != null) {
+                cd.name = cd.getTitle();
+            } else{
+                cd.name = getNameFromDataType(cd);
+            }
+        }
+        cm.vars = composedSchemasProperty;
+    }
+
+    public String getNameFromDataType(CodegenProperty property) {
+        if (Boolean.TRUE.equals(property.getIsArray())){
+            return property.mostInnerItems.dataType + "_array";
+        } else if (Boolean.TRUE.equals(property.getIsMap())) {
+            return property.mostInnerItems.dataType + "_map";
+        } else {
+            return underscore(property.dataType);
+        }
+    }
+
+
     @Override
     public ModelsMap postProcessModels(ModelsMap objs) {
         objs = postProcessModelsEnum(objs);
@@ -314,6 +340,9 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                 }
             }
 
+            if(cm.oneOf != null && !cm.oneOf.isEmpty()){
+                processOneOfSchemas(cm);
+            }
             int index = 1;
             for (CodegenProperty var : cm.vars) {
                 // add x-protobuf-type: repeated if it's an array

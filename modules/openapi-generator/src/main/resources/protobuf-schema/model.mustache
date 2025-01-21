@@ -13,6 +13,19 @@ import public "{{{modelPackage}}}/{{{import}}}.proto";
 {{#model}}
 {{#isEnum}}{{>enum}}{{/isEnum}}{{^isEnum}}message {{classname}} {
 
+{{#vendorExtensions.is_oneOf_model}}
+    oneof {{classVarName}} {
+        {{#vars}}
+        {{#description}}
+        // {{{.}}}
+        {{/description}}
+        {{#vendorExtensions.x-protobuf-type}}{{{.}}} {{/vendorExtensions.x-protobuf-type}}{{{vendorExtensions.x-protobuf-data-type}}} {{{name}}} = {{vendorExtensions.x-protobuf-index}}{{#vendorExtensions.x-protobuf-packed}} [packed=true]{{/vendorExtensions.x-protobuf-packed}};
+
+        {{/vars}}
+    }
+{{/vendorExtensions.is_oneOf_model}}
+
+{{^vendorExtensions.is_oneOf_model}}
   {{#vars}}
   {{#description}}
   // {{{.}}}
@@ -33,6 +46,7 @@ import public "{{{modelPackage}}}/{{{import}}}.proto";
   {{/isEnum}}
 
   {{/vars}}
+{{/vendorExtensions.is_oneOf_model}}
 }
 {{/isEnum}}
 {{/model}}
