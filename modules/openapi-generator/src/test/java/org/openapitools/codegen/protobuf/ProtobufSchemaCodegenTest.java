@@ -142,3 +142,4 @@ public class ProtobufSchemaCodegenTest {
         Assert.assertEquals(simpleName.classVarName, "dollar_model");
     }
 }
+
