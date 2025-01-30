@@ -17,10 +17,7 @@
 package org.openapitools.codegen.languages;
 
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.media.ArraySchema;
-import io.swagger.v3.oas.models.media.MapSchema;
-import io.swagger.v3.oas.models.media.ObjectSchema;
-import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.media.*;
 
 import lombok.Setter;
 import org.openapitools.codegen.*;
@@ -75,9 +72,13 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
     private boolean flattenComplexType = false;
 
-    private String ARRAY_SUFFIX = "Array";
+    private boolean resolveInlineEnums = false;
 
-    private String MAP_SUFFIX = "Map";
+    private final String ARRAY_SUFFIX = "Array";
+
+    private final String MAP_SUFFIX = "Map";
+
+    private Set<String> uniqueNames = new HashSet<>();
 
     @Override
     public CodegenType getTag() {
@@ -233,6 +234,9 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
             this.flattenComplexType = convertPropertyToBooleanAndWriteBack(FLATTEN_COMPLEX_TYPE);
         }
 
+        if (this.inlineSchemaOption.containsKey("RESOLVE_INLINE_ENUMS")) {
+            this.resolveInlineEnums = Boolean.valueOf(inlineSchemaOption.get("RESOLVE_INLINE_ENUMS"));
+        }
         supportingFiles.add(new SupportingFile("README.mustache", "", "README.md"));
     }
 
@@ -274,33 +278,47 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
     /**
      * Creates a new model schema for a property.
      */
-    public Schema createAdditionalSchema(Schema schema, String schemaName) {
+
+    public Schema addSchemas(Schema schema, String schemaName, Set<Schema> visitedSchema) {
         LOGGER.info("Generating new model: {}", schemaName);
 
         ObjectSchema model = new ObjectSchema();
         model.setName(schemaName);
 
         Map<String, Schema> properties = new HashMap<>();
-        properties.put(schemaName, schema);
+        properties.put(toVarName(schemaName), schema);
         model.setProperties(properties);
 
-        return model;
+        Schema refSchema = new Schema();
+        refSchema.set$ref("#/components/schemas/" + schemaName);
+        refSchema.setName(schemaName);
+
+        visitedSchema.add(refSchema);
+
+        openAPI.getComponents().addSchemas(schemaName, model);
+
+        return refSchema;
     }
 
     /**
      * Generates a reference schema object.
      */
-    private Schema createRefSchema(String schemaName) {
+    private Schema createRefSchema(String schemaName, Set<Schema> visitedSchema) {
         Schema refSchema = new Schema();
         refSchema.set$ref("#/components/schemas/" + schemaName);
         refSchema.setName(schemaName);
+        visitedSchema.add(refSchema);
         return refSchema;
     }
 
     public String getType(Schema schema) {
         if (!ModelUtils.isPrimitiveType(schema)) return "";
-        if(ModelUtils.isNumberSchema(schema) && schema.getFormat()!= null) {
-           return schema.getFormat();
+        if(ModelUtils.isNumberSchema(schema)) {
+            if(schema.getFormat() != null) {
+                return schema.getFormat();
+            } else if (typeMapping.get(schema.getType()) != null) {
+                return typeMapping.get(schema.getType());
+            }
         }
         return ModelUtils.getType(schema);
     }
@@ -308,61 +326,52 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
     /**
      * Recursively generates schemas for nested maps and arrays
      */
-    public Schema generateNestedSchema(Schema schema, Map<String, Schema> newSchemas, Set<Schema> visitedSchemas) {
+    public Schema generateNestedSchema(Schema schema, Set<Schema> visitedSchemas) {
         if (visitedSchemas.contains(schema)) {
             LOGGER.warn("Skipping recursive schema");
             return schema;
         }
-        visitedSchemas.add(schema);
 
         if(ModelUtils.isArraySchema(schema)) {
             Schema itemsSchema = ModelUtils.getSchemaItems(schema);
             itemsSchema = ModelUtils.getReferencedSchema(openAPI, itemsSchema);
-            Schema newSchema;
-            String newSchemaName;
-            if (ModelUtils.isPrimitiveType(itemsSchema)){
-                newSchemaName = getType(itemsSchema) + ARRAY_SUFFIX;
-                newSchema = createAdditionalSchema(schema, newSchemaName);
-            } else if(ModelUtils.isModel(itemsSchema)) {
-                newSchemaName = ModelUtils.getSimpleRef(ModelUtils.getSchemaItems(schema).get$ref()) + ARRAY_SUFFIX;
-                newSchema = createAdditionalSchema(schema, newSchemaName);
+            if(ModelUtils.isModel(itemsSchema)) {
+                String newSchemaName = ModelUtils.getSimpleRef(ModelUtils.getSchemaItems(schema).get$ref()) + ARRAY_SUFFIX;
+                return addSchemas(schema, newSchemaName, visitedSchemas);
+            }else if (ModelUtils.isPrimitiveType(itemsSchema)){
+                String newSchemaName = getType(itemsSchema) + ARRAY_SUFFIX;
+                return addSchemas(schema, newSchemaName, visitedSchemas);
             } else {
-                Schema childSchema = generateNestedSchema(itemsSchema, newSchemas, visitedSchemas);
-                newSchemaName = childSchema.getName() + ARRAY_SUFFIX;
+                Schema childSchema = generateNestedSchema(itemsSchema, visitedSchemas);
+                String newSchemaName = childSchema.getName() + ARRAY_SUFFIX;
                 Schema arrayModel = createArraySchema(childSchema);
-                newSchema = createAdditionalSchema(arrayModel, newSchemaName);
+                return addSchemas(arrayModel, newSchemaName, visitedSchemas);
             }
-            newSchemas.put(newSchemaName, newSchema);
-            return createRefSchema(newSchemaName);
         } else if(ModelUtils.isMapSchema(schema)) {
             Schema mapValueSchema = ModelUtils.getAdditionalProperties(schema);
             mapValueSchema = ModelUtils.getReferencedSchema(openAPI, mapValueSchema);
-            Schema newSchema;
-            String newSchemaName;
-            if (ModelUtils.isPrimitiveType(mapValueSchema)){
-                newSchemaName = getType(mapValueSchema) + MAP_SUFFIX;
-                newSchema = createAdditionalSchema(schema, newSchemaName);
-            } else if(ModelUtils.isModel(mapValueSchema)) {
-                newSchemaName = ModelUtils.getSimpleRef(ModelUtils.getAdditionalProperties(schema).get$ref()) + MAP_SUFFIX;
-                newSchema = createAdditionalSchema(schema, newSchemaName);
+            if(ModelUtils.isModel(mapValueSchema) ) {
+                String newSchemaName = ModelUtils.getSimpleRef(ModelUtils.getAdditionalProperties(schema).get$ref()) + MAP_SUFFIX;
+                return addSchemas(schema, newSchemaName, visitedSchemas);
+            }else if (ModelUtils.isPrimitiveType(mapValueSchema)){
+                String newSchemaName = getType(mapValueSchema) + MAP_SUFFIX;
+                return addSchemas(schema, newSchemaName, visitedSchemas);
             } else {
-                Schema innerSchema = generateNestedSchema(mapValueSchema, newSchemas, visitedSchemas);
-                newSchemaName = innerSchema.getName() + MAP_SUFFIX;
+                Schema innerSchema = generateNestedSchema(mapValueSchema, visitedSchemas);
+                String newSchemaName = innerSchema.getName() + MAP_SUFFIX;
                 Schema mapModel = createMapSchema(innerSchema);
-                newSchema = createAdditionalSchema(mapModel, newSchemaName);
+                return addSchemas(mapModel, newSchemaName, visitedSchemas);
             }
-            newSchemas.put(newSchemaName, newSchema);
-            return createRefSchema(newSchemaName);
         }
         return schema;
     }
 
-    public void processNestedSchemas(Schema schema, Map<String, Schema> newSchemas, Set<Schema> visitedSchemas) {
+    public void processNestedSchemas(Schema schema, Set<Schema> visitedSchemas, String modelName) {
         if (ModelUtils.isMapSchema(schema) && ModelUtils.getAdditionalProperties(schema) != null) {
             Schema mapValueSchema = ModelUtils.getAdditionalProperties(schema);
             mapValueSchema = ModelUtils.getReferencedSchema(openAPI, mapValueSchema);
             if (ModelUtils.isArraySchema(mapValueSchema) || ModelUtils.isMapSchema(mapValueSchema)) {
-                Schema innerSchema = generateNestedSchema(mapValueSchema, newSchemas, visitedSchemas);
+                Schema innerSchema = generateNestedSchema(mapValueSchema, visitedSchemas);
                 schema.setAdditionalProperties(innerSchema);
 
             }
@@ -370,49 +379,91 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
             Schema arrayItemSchema = ModelUtils.getSchemaItems(schema);
             arrayItemSchema = ModelUtils.getReferencedSchema(openAPI, arrayItemSchema);
             if (ModelUtils.isMapSchema(arrayItemSchema) || ModelUtils.isArraySchema(arrayItemSchema)) {
-                Schema innerSchema = generateNestedSchema(arrayItemSchema, newSchemas, visitedSchemas);
+                Schema innerSchema = generateNestedSchema(arrayItemSchema, visitedSchemas);
                 schema.setItems(innerSchema);
             }
         } else if (ModelUtils.isOneOf(schema) && schema.getOneOf() != null) {
             List<Schema> oneOfs = schema.getOneOf();
             List<Schema> newOneOfs = new ArrayList<>();
             for (Schema oneOf : oneOfs) {
-                oneOf = ModelUtils.getReferencedSchema(openAPI, oneOf);
-                if (ModelUtils.isArraySchema(oneOf)) {
-                    Schema innerSchema = generateNestedSchema(oneOf, newSchemas, visitedSchemas);
-                    String innerSchemaName = innerSchema.getName();
-                    Schema newOneOf = new Schema().$ref(innerSchemaName);
-                    newOneOf.setTitle(oneOf.getTitle());
-                    newOneOfs.add(newOneOf);
-                } else if (ModelUtils.isMapSchema(oneOf)) {
-                    Schema childSchema = generateNestedSchema(oneOf, newSchemas, visitedSchemas);
-                    String childSchemaName = childSchema.getName();
-                    Schema newOneOf = new Schema().$ref(childSchemaName);
-                    newOneOf.setTitle(oneOf.getTitle());
-                    newOneOfs.add(newOneOf);
-                } else {
+                Schema oneOfSchema = ModelUtils.getReferencedSchema(openAPI, oneOf);
+                if (ModelUtils.isArraySchema(oneOfSchema)) {
+                    Schema innerSchema = generateNestedSchema(oneOfSchema, visitedSchemas);
+                    innerSchema.setTitle(oneOf.getTitle());
+                    newOneOfs.add(innerSchema);
+                } else if (ModelUtils.isMapSchema(oneOfSchema)) {
+                    Schema innerSchema = generateNestedSchema(oneOfSchema, visitedSchemas);
+                    innerSchema.setTitle(oneOf.getTitle());
+                    newOneOfs.add(innerSchema);
+                } else if (ModelUtils.isEnumSchema(oneOfSchema) && !this.resolveInlineEnums) {
+                    String name = resolveName(oneOfSchema.getTitle(), modelName + "_oneOf_");
+                    openAPI.getComponents().addSchemas(name, oneOf);
+                    Schema innerSchema = createRefSchema(name, visitedSchemas);
+                    newOneOfs.add(innerSchema);
+                }
+                else {
                     newOneOfs.add(oneOf);
                 }
-
             }
             schema.setOneOf(newOneOfs);
         }
     }
 
-    private void flattenModels(Map<String, Schema> additionalSchemas) {
-        Map<String, Schema> schemas = openAPI.getComponents().getSchemas();
+    private String resolveName(String title, String prefix) {
+        return title == null? uniqueName(prefix): title;
+    }
+
+    private String uniqueName(final String name) {
+        if (openAPI.getComponents().getSchemas() == null) {
+            return name;
+        }
+
+        String uniqueName = name;
+        int count = 0;
+        while (true) {
+            if (!openAPI.getComponents().getSchemas().containsKey(uniqueName) && !uniqueNames.contains(uniqueName)) {
+                return uniqueName;
+            }
+            uniqueName = name + "_" + ++count;
+        }
+    }
+
+    private void flattenModels() {
+        Map<String, Schema> models = openAPI.getComponents().getSchemas();
         Set<Schema> visitedSchema = new HashSet<>();
-        for (Map.Entry<String, Schema> schemaEntry : schemas.entrySet()) {
-            Schema schema = schemaEntry.getValue();
-            processNestedSchemas(schema, additionalSchemas, visitedSchema);
-            if (schema.getProperties() != null) {
+        List<String> modelNames = new ArrayList<String>(models.keySet());
+        for (String modelName: modelNames) {
+            Schema schema = models.get(modelName);
+            processNestedSchemas(schema, visitedSchema, modelName);
+            if (ModelUtils.isModel(schema) && schema.getProperties() != null) {
                 Map<String, Schema> properties = schema.getProperties();
                 for (Map.Entry<String, Schema> propertyEntry : properties.entrySet()) {
                     Schema propertySchema = propertyEntry.getValue();
-                    processNestedSchemas(propertySchema, additionalSchemas, visitedSchema);
+                    processNestedSchemas(propertySchema, visitedSchema, modelName);
                 }
+            }  else if (ModelUtils.isAllOf(schema)) {
+                flattenComposedChildren(schema.getAllOf(), visitedSchema, modelName);
+            } else if (ModelUtils.isOneOf(schema)) {
+                flattenComposedChildren(schema.getOneOf(), visitedSchema, modelName);
+            } else if (ModelUtils.isAnyOf(schema)) {
+                flattenComposedChildren(schema.getAnyOf(), visitedSchema, modelName);
             }
 
+        }
+    }
+
+    private void flattenComposedChildren(List<Schema> children, Set<Schema> visitedSchema, String modelName) {
+        if (children == null || children.isEmpty()) {
+            return;
+        }
+        for(Schema child: children) {
+            child = ModelUtils.getReferencedSchema(openAPI, child);
+            Map<String, Schema> properties = child.getProperties();
+            if(properties == null || properties.isEmpty()) continue;
+            for(Map.Entry<String, Schema> propertyEntry : properties.entrySet()) {
+                Schema propertySchema = propertyEntry.getValue();
+                processNestedSchemas(propertySchema, visitedSchema, modelName);
+            }
         }
     }
 
@@ -420,13 +471,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
     public void preprocessOpenAPI(OpenAPI openAPI) {
         super.preprocessOpenAPI(openAPI);
         if (flattenComplexType) {
-            Map<String, Schema> additionalSchemas = new HashMap<>();
-            flattenModels(additionalSchemas);
-            for (Map.Entry<String, Schema> entry : additionalSchemas.entrySet() ) {
-                String name = entry.getKey();
-                Schema schema = entry.getValue();
-                openAPI.getComponents().addSchemas(name, schema);
-            }
+            flattenModels();
         }
     }
 
@@ -476,7 +521,9 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
             if (allowableValues.containsKey("values")) {
                 List<String> values = (List<String>) allowableValues.get("values");
-                values.add(0, "UNSPECIFIED");
+                List<String> modifiableValues = new ArrayList<>(values);
+                modifiableValues.add(0, "UNSPECIFIED");
+                allowableValues.put("values", modifiableValues);
             }
         }
     }
@@ -494,7 +541,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         }
     }
 
-    public List<CodegenProperty> processSchemaVars(List<CodegenProperty> composedSchemasProperty, boolean isOneOf) {
+    public List<CodegenProperty> processSchemaVars(List<CodegenProperty> composedSchemasProperty) {
         for(CodegenProperty cd: composedSchemasProperty) {
             if (cd.getTitle() != null) {
                 cd.name = cd.getTitle();
@@ -509,14 +556,28 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
     public String getNameFromDataType(CodegenProperty property) {
         if (Boolean.TRUE.equals(property.getIsArray())){
-            return underscore(property.mostInnerItems.dataType + "_array");
+            return underscore(property.mostInnerItems.dataType + ARRAY_SUFFIX);
         } else if (Boolean.TRUE.equals(property.getIsMap())) {
-            return underscore(property.mostInnerItems.dataType + "_map");
+            return underscore(property.mostInnerItems.dataType + MAP_SUFFIX);
         } else {
             return underscore(property.dataType);
         }
     }
 
+    @Override
+    public String toEnumVarName(String value, String datatype) {
+        if (value.length() == 0) {
+            return "EMPTY";
+        }
+
+        String var = value.replaceAll("\\W+", "_").toUpperCase(Locale.ROOT);
+
+        if (reservedWords.contains(var)) {
+            return escapeReservedWord(var);
+        }
+
+        return var;
+    }
 
     @Override
     public ModelsMap postProcessModels(ModelsMap objs) {
@@ -536,9 +597,9 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
             }
 
             if(cm.oneOf != null && !cm.oneOf.isEmpty()){
-                cm.vars = processSchemaVars(cm.getComposedSchemas().getOneOf(), true);
+                cm.vars = processSchemaVars(cm.getComposedSchemas().getOneOf());
             } else if (cm.anyOf != null && !cm.anyOf.isEmpty()) {
-                cm.vars = processSchemaVars(cm.getComposedSchemas().getAnyOf(), false);
+                cm.vars = processSchemaVars(cm.getComposedSchemas().getAnyOf());
             }
             int index = 1;
             for (CodegenProperty var : cm.vars) {
@@ -933,5 +994,4 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
     public GeneratorLanguage generatorLanguage() {
         return GeneratorLanguage.PROTOBUF;
     }
-
 }

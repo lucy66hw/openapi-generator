@@ -1,36 +1,30 @@
-openapi: 3.0.1
+openapi: 3.1.0
 info:
-  title: fruity
-  version: 0.0.1
-paths:
-  /:
-    get:
-      responses:
-        '200':
-          description: desc
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/fruit'
+  title: Title
+  description: Title
+  version: 1.0.0
+servers:
+  - url: 'https'
+paths: {}
 components:
   schemas:
-    fruit:
-      title: fruit
-      properties:
-        color:
-          type: string
+    Percentiles:
       oneOf:
-        - $ref: '#/components/schemas/apple'
-        - $ref: '#/components/schemas/banana'
-    apple:
-      title: apple
+        - $ref: '#/components/schemas/KeyedPercentiles'
+        - type: array
+          items:
+            $ref: '#/components/schemas/ArrayPercentilesItem'
+    KeyedPercentiles:
+      type: string
+    ArrayPercentilesItem:
       type: object
       properties:
-        kind:
+        key:
           type: string
-    banana:
-      title: banana
-      type: object
-      properties:
-        count:
-          type: number
+        value:
+          type: [ 'null', number, string ]
+        value_as_string:
+          type: string
+      required:
+        - key
+        - value
