@@ -166,8 +166,10 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         typeMapping.put("binary", "string");
         typeMapping.put("ByteArray", "bytes");
         typeMapping.put("object", "TODO_OBJECT_MAPPING");
+        typeMapping.put("AnyType", "google.protobuf.Struct");
 
         importMapping.clear();
+        importMapping.put("google.protobuf.Struct", "google/protobuf/struct");
 
         modelDocTemplateFiles.put("model_doc.mustache", ".md");
         apiDocTemplateFiles.put("api_doc.mustache", ".md");
@@ -715,7 +717,11 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
     @Override
     public String toModelImport(String name) {
-        return underscore(name);
+        if ("".equals(modelPackage())) {
+            return name;
+        } else {
+            return modelPackage() + "/" + underscore(name);
+        }
     }
 
     @Override
@@ -725,7 +731,11 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
             return getSchemaType(p) + "[" + getTypeDeclaration(inner) + "]";
         } else if (ModelUtils.isMapSchema(p)) {
             Schema inner = ModelUtils.getAdditionalProperties(p);
-            return getSchemaType(p) + "<string, " + getTypeDeclaration(inner) + ">";
+            String innerType = getTypeDeclaration(inner);
+            if (ModelUtils.isAnyType(inner)) {
+                return innerType;
+            }
+            return getSchemaType(p) + "<string, " + innerType + ">";
         }
         return super.getTypeDeclaration(p);
     }

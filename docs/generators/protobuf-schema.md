@@ -26,6 +26,7 @@ These options may be applied as additional-properties (cli) or configOptions (pl
 
 | Type/Alias | Imports |
 | ---------- | ------- |
+|google.protobuf.Struct|google/protobuf/struct|
 
 
 ## INSTANTIATION TYPES
