@@ -165,7 +165,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         typeMapping.put("file", "string");
         typeMapping.put("binary", "string");
         typeMapping.put("ByteArray", "bytes");
-        typeMapping.put("object", "TODO_OBJECT_MAPPING");
+        typeMapping.put("object", "google.protobuf.Struct");
         typeMapping.put("AnyType", "google.protobuf.Struct");
 
         importMapping.clear();
