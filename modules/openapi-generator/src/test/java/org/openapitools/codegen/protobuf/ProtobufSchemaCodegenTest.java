@@ -34,9 +34,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.testng.Assert.assertEquals;
 
@@ -91,27 +89,21 @@ public class ProtobufSchemaCodegenTest {
 
         File output = Files.createTempDirectory("test").toFile();
 
-        Map<String, Object> additionalProperties = new HashMap<>();
-        additionalProperties.put("addJsonNameAnnotation", true);
-        additionalProperties.put("numberedFieldNumberList", true);
-        additionalProperties.put("flattenComplexType", true);
-
         final CodegenConfigurator configurator = new CodegenConfigurator()
                 .setGeneratorName("protobuf-schema")
                 .setInputSpec("src/test/resources/3_0/oneOf.yaml")
-                .setOutputDir("/home/user/openapi-generator/test")
-                .setAdditionalProperties(additionalProperties);
-//
+                .setOutputDir(output.getAbsolutePath().replace("\\", "/"));
+
         final ClientOptInput clientOptInput = configurator.toClientOptInput();
         DefaultGenerator generator = new DefaultGenerator();
         List<File> files = generator.opts(clientOptInput).generate();
-//
-//        TestUtils.ensureContainsFile(files, output, "models/fruit.proto");
-//        Path path = Paths.get(output + "/models/fruit.proto");
-//
-//        assertFileEquals(path, Paths.get("src/test/resources/3_0/protobuf-schema/fruitOneOf.proto"));
-//
-//        output.deleteOnExit();
+
+        TestUtils.ensureContainsFile(files, output, "models/fruit.proto");
+        Path path = Paths.get(output + "/models/fruit.proto");
+
+        assertFileEquals(path, Paths.get("src/test/resources/3_0/protobuf-schema/fruitOneOf.proto"));
+
+        output.deleteOnExit();
     }
 
     @Test
