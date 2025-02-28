@@ -42,6 +42,8 @@ import java.io.File;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
 import com.google.common.base.CaseFormat;
 
 import static org.openapitools.codegen.utils.StringUtils.*;
@@ -60,9 +62,13 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
     public static final String FLATTEN_COMPLEX_TYPE = "flattenComplexType";
 
+    public static final String AGGREGATE_MODELS_NAME = "aggregateModelsName";
+
     private final Logger LOGGER = LoggerFactory.getLogger(ProtobufSchemaCodegen.class);
 
     @Setter protected String packageName = "openapitools";
+
+    @Setter protected String aggregateModelsName = null;
 
     private boolean numberedFieldNumberList = false;
 
@@ -192,6 +198,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         addSwitch(START_ENUMS_WITH_UNSPECIFIED, "Introduces \"UNSPECIFIED\" as the first element of enumerations.", startEnumsWithUnspecified);
         addSwitch(ADD_JSON_NAME_ANNOTATION, "Append \"json_name\" annotation to message field when the specification name differs from the protobuf field name", addJsonNameAnnotation);
         addSwitch(FLATTEN_COMPLEX_TYPE, "Generate Additional message for complex type", flattenComplexType);
+        addOption(AGGREGATE_MODELS_NAME, "Specifies the aggregated protobuf file name.", null);
     }
 
     @Override
@@ -236,6 +243,13 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
         if (this.inlineSchemaOption.containsKey("RESOLVE_INLINE_ENUMS")) {
             this.resolveInlineEnums = Boolean.valueOf(inlineSchemaOption.get("RESOLVE_INLINE_ENUMS"));
+        }
+
+        if (additionalProperties.containsKey(AGGREGATE_MODELS_NAME)) {
+            this.setAggregateModelsName((String) additionalProperties.get(AGGREGATE_MODELS_NAME));
+        }
+        if (additionalProperties.containsKey("AGGREGATE_MODELS_NAME")) {
+            this.numberedFieldNumberList = convertPropertyToBooleanAndWriteBack(NUMBERED_FIELD_NUMBER_LIST);
         }
         supportingFiles.add(new SupportingFile("README.mustache", "", "README.md"));
     }
@@ -557,8 +571,10 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
     public String getNameFromDataType(CodegenProperty property) {
         if (Boolean.TRUE.equals(property.getIsArray())){
             return underscore(property.mostInnerItems.dataType + ARRAY_SUFFIX);
-        } else if (Boolean.TRUE.equals(property.getIsMap())) {
+        } else if (Boolean.TRUE.equals(property.getIsMap()) && Boolean.FALSE.equals(property.getIsFreeFormObject())) {
             return underscore(property.mostInnerItems.dataType + MAP_SUFFIX);
+        } else if (Boolean.TRUE.equals(property.getIsFreeFormObject() || property.getIsAnyType())){
+            return "object";
         } else {
             return underscore(property.dataType);
         }
@@ -676,7 +692,32 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                         .forEach(importFromList -> this.addImport(objs, parentCM, importFromList));
             }
         }
-        return objs;
+        if (this.aggregateModelsName == null){
+            return objs;
+        }
+        return aggregateModels(objs);
+    }
+
+    public Map<String, ModelsMap> aggregateModels(Map<String, ModelsMap> objs) {
+        Map<String, ModelsMap> objects = new HashMap<>();
+        ModelsMap aggregateObj = objs.values().stream()
+                .findFirst()
+                .orElse(new ModelsMap());
+
+        List<ModelMap> models = objs.values().stream()
+                .flatMap(modelsMap -> modelsMap.getModels().stream())
+                .collect(Collectors.toList());
+
+        Set<Map<String, String>> imports = objs.values().stream()
+                .flatMap(modelsMap -> modelsMap.getImports().stream())
+                .filter(importMap -> !importMap.get("import").startsWith("models/"))
+                .collect(Collectors.toSet());
+
+
+        aggregateObj.setModels(models);
+        aggregateObj.setImports(new ArrayList<>(imports));
+        objects.put(this.aggregateModelsName, aggregateObj);
+        return objects;
     }
 
     public void addImport(Map<String, ModelsMap> objs, CodegenModel cm, String importValue) {
@@ -907,7 +948,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                     }
                 }
 
-                if (addJsonNameAnnotation && !p.baseName.equals(p.paramName)) {
+                if (addJsonNameAnnotation && !p.baseName.equals(p.paramName) && !p.isBodyParam) {
                     p.vendorExtensions.put("x-protobuf-json-name", p.baseName);
                 }
 
@@ -933,6 +974,12 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
             }
         }
 
+        if(this.aggregateModelsName == null){
+            return objs;
+        }
+
+        List<Map<String, String>> aggregate_imports = Collections.singletonList(Collections.singletonMap(IMPORT, toModelImport(this.aggregateModelsName)));
+        objs.setImports(aggregate_imports);
         return objs;
     }
 
