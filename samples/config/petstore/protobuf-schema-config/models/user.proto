@@ -12,10 +12,11 @@ syntax = "proto3";
 
 package petstore;
 
+import public "models/id.proto";
 
 message User {
 
-  int64 id = 1;
+  Id id = 1;
 
   string username = 2;
 

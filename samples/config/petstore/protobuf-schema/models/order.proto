@@ -31,7 +31,6 @@ message Order {
   }
 
   Status status = 355610639;
-
   bool complete = 62574280;
 
 }

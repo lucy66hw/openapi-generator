@@ -17,6 +17,7 @@ import public "models/banana.proto";
 
 message Fruit {
 
+  string color = 94842723;
 
   Apple apple = 93029210;
 

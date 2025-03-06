@@ -17,11 +17,14 @@ import public "models/banana.proto";
 
 message Fruit {
 
-    oneof fruit {
-        Apple apple = 93029210;
+  oneof fruit {
 
-        Banana banana = 322613405;
+    Apple apple = 93029210;
 
-    }
+
+    Banana banana = 322613405;
+
+  }
+  string color = 94842723;
 
 }

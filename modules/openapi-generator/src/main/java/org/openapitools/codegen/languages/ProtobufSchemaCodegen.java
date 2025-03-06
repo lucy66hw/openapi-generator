@@ -117,6 +117,8 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                         "array")
         );
 
+        useOneOfInterfaces = true;
+
         languageSpecificPrimitives = new HashSet<>(
                 Arrays.asList(
                         "map",
@@ -168,7 +170,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         typeMapping.put("object", "TODO_OBJECT_MAPPING");
 
         importMapping.clear();
-
+        supportsMultipleInheritance = false;
         modelDocTemplateFiles.put("model_doc.mustache", ".md");
         apiDocTemplateFiles.put("api_doc.mustache", ".md");
 
@@ -298,7 +300,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         }
     }
 
-    public List<CodegenProperty> processOneOfAnyOfItems(List<CodegenProperty> composedSchemasProperty) {
+    public void processOneOfAnyOfItems(List<CodegenProperty> composedSchemasProperty, List<CodegenProperty> vars, boolean isOneOf) {
         for(CodegenProperty cd: composedSchemasProperty) {
             if (cd.getTitle() != null) {
                 cd.name = cd.getTitle();
@@ -307,8 +309,11 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                 cd.name = getNameFromDataType(cd);
                 cd.baseName = getNameFromDataType(cd);
             }
+            if(isOneOf) {
+                cd.vendorExtensions.put("x-oneOf", true);
+            }
+            vars.add(cd);
         }
-        return composedSchemasProperty;
     }
 
     public String getNameFromDataType(CodegenProperty property) {
@@ -320,7 +325,6 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
             return underscore(property.dataType);
         }
     }
-
 
     @Override
     public ModelsMap postProcessModels(ModelsMap objs) {
@@ -340,11 +344,10 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
             }
 
             if(cm.oneOf != null && !cm.oneOf.isEmpty()){
-                cm.vars = processOneOfAnyOfItems(cm.getComposedSchemas().getOneOf());
+                processOneOfAnyOfItems(cm.getComposedSchemas().getOneOf(), cm.vars, true);
             } else if (cm.anyOf != null && !cm.anyOf.isEmpty()) {
-                cm.vars = processOneOfAnyOfItems(cm.getComposedSchemas().getAnyOf());
+                processOneOfAnyOfItems(cm.getComposedSchemas().getAnyOf(), cm.vars, false);
             }
-            int index = 1;
             for (CodegenProperty var : cm.vars) {
                 // add x-protobuf-type: repeated if it's an array
                 if (Boolean.TRUE.equals(var.isArray)) {
@@ -370,19 +373,6 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                     if (var.allowableValues.containsKey("enumVars")) {
                         List<Map<String, Object>> enumVars = (List<Map<String, Object>>) var.allowableValues.get("enumVars");
                         addEnumIndexes(enumVars);
-                    }
-                }
-
-                // Add x-protobuf-index, unless already specified
-                if (this.numberedFieldNumberList) {
-                    var.vendorExtensions.putIfAbsent("x-protobuf-index", index);
-                    index++;
-                } else {
-                    try {
-                        var.vendorExtensions.putIfAbsent("x-protobuf-index", generateFieldNumberFromString(var.getName()));
-                    } catch (ProtoBufIndexComputationException e) {
-                        LOGGER.error("Exception when assigning a index to a protobuf field", e);
-                        var.vendorExtensions.putIfAbsent("x-protobuf-index", "Generated field number is in reserved range (19000, 19999)");
                     }
                 }
 
@@ -418,8 +408,54 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                         .filter(importFromList -> !parentCM.getClassname().equalsIgnoreCase(importFromList) && !cm.getClassname().equalsIgnoreCase(importFromList))
                         .forEach(importFromList -> this.addImport(objs, parentCM, importFromList));
             }
+            CodegenComposedSchemas composedSchemas = cm.getComposedSchemas();
+            if(composedSchemas != null && composedSchemas.getOneOf() != null){
+                removePropertiesDeclaredInComposedTypes(composedSchemas.getOneOf(), cm, objs);
+            }
+
+            if(composedSchemas != null && composedSchemas.getAnyOf() != null){
+                removePropertiesDeclaredInComposedTypes(composedSchemas.getAnyOf(), cm, objs);
+            }
+            int index = 1;
+            for (CodegenProperty var : cm.vars) {
+                // Add x-protobuf-index, unless already specified
+                if (this.numberedFieldNumberList) {
+                    var.vendorExtensions.putIfAbsent("x-protobuf-index", index);
+                    index++;
+                } else {
+                    try {
+                        var.vendorExtensions.putIfAbsent("x-protobuf-index", generateFieldNumberFromString(var.getName()));
+                    } catch (ProtoBufIndexComputationException e) {
+                        LOGGER.error("Exception when assigning a index to a protobuf field", e);
+                        var.vendorExtensions.putIfAbsent("x-protobuf-index", "Generated field number is in reserved range (19000, 19999)");
+                    }
+                }
+            }
         }
         return objs;
+    }
+
+    public void removePropertiesDeclaredInComposedTypes(List<CodegenProperty> composedProperties, CodegenModel model, Map<String, ModelsMap> objs) {
+        for (CodegenProperty oneOfProperty : composedProperties) {
+            String ref = oneOfProperty.getRef();
+            if (ref != null) {
+                for (Map.Entry<String, ModelsMap> composedEntry : objs.entrySet()) {
+                    CodegenModel composedModel = ModelUtils.getModelByName(composedEntry.getKey(), objs);
+                    if (ref.endsWith("/" + composedModel.name)) {
+                        for (CodegenProperty composedProperty : composedModel.allVars) {
+                            model.vars.removeIf(v -> v.name.equals(composedProperty.name));
+                            model.allVars.removeIf(v -> v.name.equals(composedProperty.name));
+                            model.readOnlyVars.removeIf(v -> v.name.equals(composedProperty.name));
+                            model.nonNullableVars.removeIf(v -> v.name.equals(composedProperty.name));
+                            model.optionalVars.removeIf(v -> v.name.equals(composedProperty.name));
+                            model.parentRequiredVars.removeIf(v -> v.name.equals(composedProperty.name));
+                            model.readWriteVars.removeIf(v -> v.name.equals(composedProperty.name));
+                            model.requiredVars.removeIf(v -> v.name.equals(composedProperty.name));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     public void addImport(Map<String, ModelsMap> objs, CodegenModel cm, String importValue) {

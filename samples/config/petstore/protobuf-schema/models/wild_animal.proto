@@ -12,25 +12,15 @@ syntax = "proto3";
 
 package petstore;
 
-import public "models/id.proto";
+import public "models/category.proto";
+import public "models/pet.proto";
+import public "models/tag.proto";
+import public "models/wild_animal.proto";
 
-message User {
+message WildAnimal {
 
-  Id id = 3355;
+  string name = 3373707;
 
-  string username = 265713450;
-
-  string first_name = 160985414;
-
-  string last_name = 402509463;
-
-  string email = 96619420;
-
-  string password = 143243933;
-
-  string phone = 106642798;
-
-  // User Status
-  int32 user_status = 150530330;
+  string species = 397852359;
 
 }
