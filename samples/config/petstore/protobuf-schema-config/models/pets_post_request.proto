@@ -12,11 +12,13 @@ syntax = "proto3";
 
 package petstore;
 
+import public "models/cat.proto";
+import public "models/dog.proto";
 
-message Id {
+message PetsPostRequest {
 
-  float float = 97526364;
+  Cat cat = 1;
 
-  string string = 355114992;
+  Dog dog = 2;
 
 }

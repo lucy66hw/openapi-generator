@@ -117,8 +117,6 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                         "array")
         );
 
-        useOneOfInterfaces = true;
-
         languageSpecificPrimitives = new HashSet<>(
                 Arrays.asList(
                         "map",
@@ -170,7 +168,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         typeMapping.put("object", "TODO_OBJECT_MAPPING");
 
         importMapping.clear();
-        supportsMultipleInheritance = false;
+
         modelDocTemplateFiles.put("model_doc.mustache", ".md");
         apiDocTemplateFiles.put("api_doc.mustache", ".md");
 

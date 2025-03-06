@@ -12,15 +12,17 @@ syntax = "proto3";
 
 package petstore;
 
-import public "models/category.proto";
-import public "models/pet.proto";
-import public "models/tag.proto";
-import public "models/wild_animal.proto";
 
-message WildAnimal {
+message Dog {
 
-  string name = 3373707;
+  bool bark = 3016376;
 
-  string species = 397852359;
+  enum Breed {
+    BREED_DINGO = 0;
+    BREED_HUSKY = 1;
+    BREED_RETRIEVER = 2;
+    BREED_SHEPHERD = 3;
+  }
 
+  Breed breed = 94001524;
 }

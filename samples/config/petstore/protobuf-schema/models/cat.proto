@@ -12,15 +12,11 @@ syntax = "proto3";
 
 package petstore;
 
-import public "models/category.proto";
-import public "models/pet.proto";
-import public "models/tag.proto";
-import public "models/wild_animal.proto";
 
-message WildAnimal {
+message Cat {
 
-  string name = 1;
+  bool hunts = 99641152;
 
-  string species = 2;
+  int32 age = 96511;
 
 }

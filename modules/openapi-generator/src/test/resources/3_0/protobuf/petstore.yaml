@@ -18,6 +18,29 @@ tags:
   - name: user
     description: Operations about user
 paths:
+  /pets:
+    get:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/Cat"
+                - $ref: "#/components/schemas/Dog"
+      responses:
+        "200":
+          description: Updated
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - $ref: "#/components/schemas/Cat"
+                - $ref: "#/components/schemas/Dog"
+      responses:
+        "200":
+          description: Updated
   /pet:
     post:
       tags:
@@ -142,12 +165,12 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Animal'
+                  $ref: '#/components/schemas/Pet'
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Animal'
+                  $ref: '#/components/schemas/Pet'
         '400':
           description: Invalid tag value
       security:
@@ -604,6 +627,21 @@ components:
       name: api_key
       in: header
   schemas:
+    Dog:
+      type: object
+      properties:
+        bark:
+          type: boolean
+        breed:
+          type: string
+          enum: [ Dingo, Husky, Retriever, Shepherd ]
+    Cat:
+      type: object
+      properties:
+        hunts:
+          type: boolean
+        age:
+          type: integer
     Order:
       title: Pet Order
       description: An order for a pets from the pet store
@@ -652,7 +690,8 @@ components:
       type: object
       properties:
         id:
-          $ref: '#/components/schemas/Id'
+          type: integer
+          format: int64
         username:
           type: string
         firstName:
@@ -671,10 +710,6 @@ components:
           description: User Status
       xml:
         name: User
-    Id:
-      anyOf:
-        - type: number
-        - type: string
     Tag:
       title: Pet Tag
       description: A tag for a pet
@@ -687,18 +722,6 @@ components:
           type: string
       xml:
         name: Tag
-    Animal:
-      oneOf:
-        - $ref: '#/components/schemas/Pet'
-        - $ref: '#/components/schemas/WildAnimal'
-        - type: string
-    WildAnimal:
-      type: object
-      properties:
-        name:
-          type: string
-        species:
-          type: string
     Pet:
       title: a Pet
       description: A pet for sale in the pet store

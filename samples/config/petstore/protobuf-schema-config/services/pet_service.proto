@@ -13,7 +13,6 @@ syntax = "proto3";
 package petstore.services.petservice;
 
 import "google/protobuf/empty.proto";
-import public "models/animal.proto";
 import public "models/api_response.proto";
 import public "models/pet.proto";
 
@@ -66,7 +65,7 @@ message FindPetsByTagsRequest {
 }
 
 message FindPetsByTagsResponse {
-  repeated Animal data = 1;
+  repeated Pet data = 1;
 }
 
 message GetPetByIdRequest {

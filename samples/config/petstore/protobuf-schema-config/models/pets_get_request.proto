@@ -12,22 +12,17 @@ syntax = "proto3";
 
 package petstore;
 
-import public "models/category.proto";
-import public "models/pet.proto";
-import public "models/tag.proto";
-import public "models/wild_animal.proto";
+import public "models/cat.proto";
+import public "models/dog.proto";
 
-message Animal {
+message PetsGetRequest {
 
-  oneof animal {
+  oneof pets_get_request {
 
-    Pet pet = 110879;
+    Cat cat = 1;
 
 
-    WildAnimal wild_animal = 159882224;
-
-
-    string string = 355114992;
+    Dog dog = 2;
 
   }
 }
