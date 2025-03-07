@@ -78,8 +78,6 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
     private boolean flattenComplexType = false;
 
-    private boolean resolveInlineEnums = false;
-
     private final String ARRAY_SUFFIX = "Array";
 
     private final String MAP_SUFFIX = "Map";
@@ -241,16 +239,10 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
             this.flattenComplexType = convertPropertyToBooleanAndWriteBack(FLATTEN_COMPLEX_TYPE);
         }
 
-        if (this.inlineSchemaOption.containsKey("RESOLVE_INLINE_ENUMS")) {
-            this.resolveInlineEnums = Boolean.valueOf(inlineSchemaOption.get("RESOLVE_INLINE_ENUMS"));
-        }
-
         if (additionalProperties.containsKey(AGGREGATE_MODELS_NAME)) {
             this.setAggregateModelsName((String) additionalProperties.get(AGGREGATE_MODELS_NAME));
         }
-        if (additionalProperties.containsKey("AGGREGATE_MODELS_NAME")) {
-            this.numberedFieldNumberList = convertPropertyToBooleanAndWriteBack(NUMBERED_FIELD_NUMBER_LIST);
-        }
+
         supportingFiles.add(new SupportingFile("README.mustache", "", "README.md"));
     }
 
@@ -409,13 +401,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                     Schema innerSchema = generateNestedSchema(oneOfSchema, visitedSchemas);
                     innerSchema.setTitle(oneOf.getTitle());
                     newOneOfs.add(innerSchema);
-                } else if (ModelUtils.isEnumSchema(oneOfSchema) && !this.resolveInlineEnums) {
-                    String name = resolveName(oneOfSchema.getTitle(), modelName + "_oneOf_");
-                    openAPI.getComponents().addSchemas(name, oneOf);
-                    Schema innerSchema = createRefSchema(name, visitedSchemas);
-                    newOneOfs.add(innerSchema);
-                }
-                else {
+                } else {
                     newOneOfs.add(oneOf);
                 }
             }
