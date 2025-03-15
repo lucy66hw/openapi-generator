@@ -184,6 +184,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         typeMapping.put("binary", "string");
         typeMapping.put("ByteArray", "bytes");
         typeMapping.put("object", "google.protobuf.Struct");
+        typeMapping.put("AnyType", "google.protobuf.Struct");
 
         importMapping.clear();
         importMapping.put("google.protobuf.Struct", "google/protobuf/struct");
@@ -519,6 +520,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
     public List<CodegenProperty> processSchemaVars(List<CodegenProperty> composedSchemasProperty) {
         for(CodegenProperty cd: composedSchemasProperty) {
             cd.name = resolveVarName(cd);
+            cd.baseName = resolveVarName(cd);
         }
         return composedSchemasProperty;
     }
