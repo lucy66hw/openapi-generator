@@ -64,6 +64,8 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
     public static final String AGGREGATE_MODELS_NAME = "aggregateModelsName";
 
+    public static final String SUPPORT_MULTIPLE_RESPONSES = "supportMultipleResponses";
+
     private final Logger LOGGER = LoggerFactory.getLogger(ProtobufSchemaCodegen.class);
 
     @Setter protected String packageName = "openapitools";
@@ -78,11 +80,11 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
     private boolean flattenComplexType = false;
 
+    private boolean supportMultipleResponses = false;
+
     private final String ARRAY_SUFFIX = "Array";
 
     private final String MAP_SUFFIX = "Map";
-
-    private Set<String> uniqueNames = new HashSet<>();
 
     @Override
     public CodegenType getTag() {
@@ -182,7 +184,6 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         typeMapping.put("binary", "string");
         typeMapping.put("ByteArray", "bytes");
         typeMapping.put("object", "google.protobuf.Struct");
-        typeMapping.put("AnyType", "google.protobuf.Struct");
 
         importMapping.clear();
         importMapping.put("google.protobuf.Struct", "google/protobuf/struct");
@@ -196,6 +197,7 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
         addSwitch(START_ENUMS_WITH_UNSPECIFIED, "Introduces \"UNSPECIFIED\" as the first element of enumerations.", startEnumsWithUnspecified);
         addSwitch(ADD_JSON_NAME_ANNOTATION, "Append \"json_name\" annotation to message field when the specification name differs from the protobuf field name", addJsonNameAnnotation);
         addSwitch(FLATTEN_COMPLEX_TYPE, "Generate Additional message for complex type", flattenComplexType);
+        addSwitch(SUPPORT_MULTIPLE_RESPONSES, "Support multiple responses for a single operation", supportMultipleResponses);
         addOption(AGGREGATE_MODELS_NAME, "Specifies the aggregated protobuf file name.", null);
     }
 
@@ -239,6 +241,9 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
             this.flattenComplexType = convertPropertyToBooleanAndWriteBack(FLATTEN_COMPLEX_TYPE);
         }
 
+        if(additionalProperties.containsKey(this.SUPPORT_MULTIPLE_RESPONSES)) {
+            this.supportMultipleResponses = convertPropertyToBooleanAndWriteBack(SUPPORT_MULTIPLE_RESPONSES);
+        }
         if (additionalProperties.containsKey(AGGREGATE_MODELS_NAME)) {
             this.setAggregateModelsName((String) additionalProperties.get(AGGREGATE_MODELS_NAME));
         }
@@ -303,17 +308,6 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
         openAPI.getComponents().addSchemas(schemaName, model);
 
-        return refSchema;
-    }
-
-    /**
-     * Generates a reference schema object.
-     */
-    private Schema createRefSchema(String schemaName, Set<Schema> visitedSchema) {
-        Schema refSchema = new Schema();
-        refSchema.set$ref("#/components/schemas/" + schemaName);
-        refSchema.setName(schemaName);
-        visitedSchema.add(refSchema);
         return refSchema;
     }
 
@@ -406,25 +400,6 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                 }
             }
             schema.setOneOf(newOneOfs);
-        }
-    }
-
-    private String resolveName(String title, String prefix) {
-        return title == null? uniqueName(prefix): title;
-    }
-
-    private String uniqueName(final String name) {
-        if (openAPI.getComponents().getSchemas() == null) {
-            return name;
-        }
-
-        String uniqueName = name;
-        int count = 0;
-        while (true) {
-            if (!openAPI.getComponents().getSchemas().containsKey(uniqueName) && !uniqueNames.contains(uniqueName)) {
-                return uniqueName;
-            }
-            uniqueName = name + "_" + ++count;
         }
     }
 
@@ -543,26 +518,25 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
 
     public List<CodegenProperty> processSchemaVars(List<CodegenProperty> composedSchemasProperty) {
         for(CodegenProperty cd: composedSchemasProperty) {
-            if (cd.getTitle() != null) {
-                cd.name = cd.getTitle();
-                cd.baseName = cd.getTitle();
-            } else{
-                cd.name = getNameFromDataType(cd);
-                cd.baseName = getNameFromDataType(cd);
-            }
+            cd.name = resolveVarName(cd);
         }
         return composedSchemasProperty;
     }
 
+    private String resolveVarName(CodegenProperty property) {
+        if(property.getTitle() != null) {
+            return toVarName(property.getTitle());
+        } else {
+            return getNameFromDataType(property);
+        }
+    }
     public String getNameFromDataType(CodegenProperty property) {
         if (Boolean.TRUE.equals(property.getIsArray())){
-            return underscore(property.mostInnerItems.dataType + ARRAY_SUFFIX);
-        } else if (Boolean.TRUE.equals(property.getIsMap()) && Boolean.FALSE.equals(property.getIsFreeFormObject())) {
-            return underscore(property.mostInnerItems.dataType + MAP_SUFFIX);
-        } else if (Boolean.TRUE.equals(property.getIsFreeFormObject() || property.getIsAnyType())){
-            return "object";
+            return toVarName(property.mostInnerItems.dataType + ARRAY_SUFFIX);
+        } else if (Boolean.TRUE.equals(property.getIsMap())) {
+            return toVarName(property.mostInnerItems.dataType + MAP_SUFFIX);
         } else {
-            return underscore(property.dataType);
+            return toVarName(property.dataType);
         }
     }
 
@@ -956,6 +930,24 @@ public class ProtobufSchemaCodegen extends DefaultCodegen implements CodegenConf
                     } else { // primitive type
                         op.vendorExtensions.put("x-grpc-response-type", op.returnBaseType);
                     }
+                }
+            }
+
+            if(this.supportMultipleResponses) {
+                int responseIdx = 1;
+                op.vendorExtensions.put("x-grpc-response", op.operationId+"Response");
+                for (CodegenResponse r : op.responses) {
+                    if (r.isMap && r.isModel) {
+                        r.vendorExtensions.put("x-oneOf-response-type", r.returnProperty.dataType);
+                        r.vendorExtensions.put("x-oneOf-response-name", resolveVarName(r.returnProperty));
+                    } else if (r.isArray) {
+                        r.vendorExtensions.put("x-oneOf-response-type", "repeated " + r.returnProperty.items.dataType);
+                        r.vendorExtensions.put("x-oneOf-response-name", resolveVarName(r.returnProperty));
+                    } else { // primitive type
+                        r.vendorExtensions.put("x-oneOf-response-type", r.dataType);
+                        r.vendorExtensions.put("x-oneOf-response-name", resolveVarName(r.returnProperty));
+                    }
+                    r.vendorExtensions.put("x-oneOf-response-index", responseIdx++);
                 }
             }
         }
